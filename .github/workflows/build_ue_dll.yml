@@ -17,7 +17,9 @@ jobs:
       cancel-in-progress: true
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
-      VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
+      # 使用本地 files 缓存提供者，避免 x-gha 需要的 ACTIONS_RUNTIME_TOKEN/URL 要求
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}\vcpkg\archives
+      VCPKG_BINARY_SOURCES: "clear;files,${{ runner.temp }}\\vcpkg\\archives,readwrite"
       # 启用 manifest + 二进制缓存
       VCPKG_FEATURE_FLAGS: manifests,binarycaching
       # 可选：固定 vcpkg 版本（留空则使用最新）。可填具体 commit，如 2024-07 baseline 对应的提交。
