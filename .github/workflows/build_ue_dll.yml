@@ -70,7 +70,7 @@ jobs:
             "version-string": "0.0.0",
             "builtin-baseline": "${{ env.VCPKG_COMMIT }}",
             "dependencies": [
-              { "name": "openvdb", "default-features": false, "features": [ "core" ] },
+              { "name": "openvdb", "default-features": false },
               "tbb",
               "zlib",
               "imath",
