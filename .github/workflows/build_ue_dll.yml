@@ -16,6 +16,10 @@ jobs:
       cancel-in-progress: true
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
+      VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
+      VCPKG_FEATURE_FLAGS: manifests,binarycaching
+      # 可选：固定 vcpkg 版本（留空则使用最新）。可填具体 commit，如 2024-07 baseline 对应的提交。
+      VCPKG_COMMIT: ""
 
     steps:
       - name: Checkout
@@ -34,6 +38,20 @@ jobs:
           $env:VCPKG_ROOT = "$env:RUNNER_TEMP\vcpkg"
           git clone --depth 1 https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
+          if ($env:VCPKG_COMMIT -ne "") { git -C $env:VCPKG_ROOT fetch --depth 1 origin $env:VCPKG_COMMIT; git -C $env:VCPKG_ROOT checkout $env:VCPKG_COMMIT }
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_ROOT\archives","$env:VCPKG_ROOT\installed" | Out-Null
+
+      - name: Cache vcpkg binary archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_ROOT }}\archives
+          key: vcpkg-archives-${{ runner.os }}-x64-windows-static-md
+
+      - name: Cache vcpkg installed tree
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_ROOT }}\installed
+          key: vcpkg-installed-${{ runner.os }}-x64-windows-static-md
           & "$env:VCPKG_ROOT\vcpkg.exe" install `
             openvdb[core]:x64-windows-static-md `
             tbb:x64-windows-static-md `
