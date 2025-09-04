@@ -41,6 +41,8 @@ jobs:
           git clone --depth 1 https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
           & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
           if ($env:VCPKG_COMMIT -ne "") { git -C $env:VCPKG_ROOT fetch --depth 1 origin $env:VCPKG_COMMIT; git -C $env:VCPKG_ROOT checkout $env:VCPKG_COMMIT }
+          $commit = git -C $env:VCPKG_ROOT rev-parse HEAD
+          "VCPKG_COMMIT=$commit" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding ASCII
           New-Item -ItemType Directory -Force -Path "$env:VCPKG_ROOT\archives","$env:VCPKG_ROOT\installed" | Out-Null
 
       - name: Cache vcpkg binary archives
@@ -62,12 +64,11 @@ jobs:
       - name: Generate vcpkg manifest (minimal deps)
         shell: powershell
         run: |
-          $baseline = git -C $env:VCPKG_ROOT rev-parse HEAD
           @"
           {
             "name": "coacd-ue",
             "version-string": "0.0.0",
-            "builtin-baseline": "$baseline",
+            "builtin-baseline": "${{ env.VCPKG_COMMIT }}",
             "dependencies": [
               { "name": "openvdb", "default-features": false, "features": [ "core" ] },
               "tbb",
