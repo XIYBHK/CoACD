@@ -17,7 +17,8 @@ jobs:
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
       VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
-      VCPKG_FEATURE_FLAGS: manifests,binarycaching
+      # 禁用 manifest 模式，使用 classic 安装；仍启用二进制缓存
+      VCPKG_FEATURE_FLAGS: -manifests,binarycaching
       # 可选：固定 vcpkg 版本（留空则使用最新）。可填具体 commit，如 2024-07 baseline 对应的提交。
       VCPKG_COMMIT: ""
 
@@ -56,7 +57,7 @@ jobs:
       - name: Install vcpkg packages (minimal deps)
         shell: powershell
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install `
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --x-feature-flags=-manifests `
             openvdb[core]:x64-windows-static-md `
             tbb:x64-windows-static-md `
             zlib:x64-windows-static-md `
