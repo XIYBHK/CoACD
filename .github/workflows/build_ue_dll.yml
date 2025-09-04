@@ -52,6 +52,10 @@ jobs:
         with:
           path: ${{ env.VCPKG_ROOT }}\installed
           key: vcpkg-installed-${{ runner.os }}-x64-windows-static-md
+
+      - name: Install vcpkg packages (minimal deps)
+        shell: powershell
+        run: |
           & "$env:VCPKG_ROOT\vcpkg.exe" install `
             openvdb[core]:x64-windows-static-md `
             tbb:x64-windows-static-md `
