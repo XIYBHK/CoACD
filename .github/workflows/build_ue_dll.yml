@@ -11,14 +11,15 @@ jobs:
     permissions:
       contents: read
     runs-on: windows-2022
+    timeout-minutes: 60
     concurrency:
       group: build-ue-dll-${{ github.ref }}
       cancel-in-progress: true
     env:
       CMAKE_BUILD_PARALLEL_LEVEL: 4
       VCPKG_BINARY_SOURCES: clear;x-gha,readwrite
-      # 禁用 manifest 模式，使用 classic 安装；仍启用二进制缓存
-      VCPKG_FEATURE_FLAGS: -manifests,binarycaching
+      # 启用 manifest + 二进制缓存
+      VCPKG_FEATURE_FLAGS: manifests,binarycaching
       # 可选：固定 vcpkg 版本（留空则使用最新）。可填具体 commit，如 2024-07 baseline 对应的提交。
       VCPKG_COMMIT: ""
 
@@ -47,22 +48,46 @@ jobs:
         with:
           path: ${{ env.VCPKG_ROOT }}\archives
           key: vcpkg-archives-${{ runner.os }}-x64-windows-static-md
+          restore-keys: |
+            vcpkg-archives-${{ runner.os }}-
 
       - name: Cache vcpkg installed tree
         uses: actions/cache@v4
         with:
           path: ${{ env.VCPKG_ROOT }}\installed
           key: vcpkg-installed-${{ runner.os }}-x64-windows-static-md
+          restore-keys: |
+            vcpkg-installed-${{ runner.os }}-
 
-      - name: Install vcpkg packages (minimal deps)
+      - name: Generate vcpkg manifest (minimal deps)
         shell: powershell
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install --x-feature-flags=-manifests `
-            openvdb[core]:x64-windows-static-md `
-            tbb:x64-windows-static-md `
-            zlib:x64-windows-static-md `
-            imath:x64-windows-static-md `
-            spdlog:x64-windows-static-md
+          $baseline = git -C $env:VCPKG_ROOT rev-parse HEAD
+          @"
+          {
+            "name": "coacd-ue",
+            "version-string": "0.0.0",
+            "builtin-baseline": "$baseline",
+            "dependencies": [
+              { "name": "openvdb", "default-features": false, "features": [ "core" ] },
+              "tbb",
+              "zlib",
+              "imath",
+              "spdlog"
+            ]
+          }
+          "@ | Out-File -FilePath vcpkg.json -Encoding UTF8
+
+      - name: Install vcpkg packages (manifest)
+        shell: powershell
+        run: |
+          $max=3
+          for ($i=1; $i -le $max; $i++) {
+            & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows-static-md
+            if ($LASTEXITCODE -eq 0) { break }
+            Start-Sleep -Seconds (10 * $i)
+          }
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install failed after $max attempts" }
 
       - name: Configure CMake (Release, /MD, OpenMP ON, LTO, minimal deps)
         shell: powershell
@@ -87,6 +112,16 @@ jobs:
       - name: Build _coacd (lib_coacd.dll)
         shell: powershell
         run: cmake --build build-ue-full --target _coacd --config Release --parallel
+
+      - name: Upload CMake logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-logs-${{ github.run_number }}
+          path: |
+            build-ue-full/CMakeFiles/CMakeOutput.log
+            build-ue-full/CMakeFiles/CMakeError.log
+          if-no-files-found: ignore
 
       - name: Upload DLL artifact
         uses: actions/upload-artifact@v4
