@@ -1,0 +1,75 @@
+name: Build UE DLL
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-ue-dll:
+    permissions:
+      contents: read
+    runs-on: windows-2022
+    concurrency:
+      group: build-ue-dll-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSVC (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Setup vcpkg and install minimal deps (openvdb[core])
+        shell: powershell
+        run: |
+          $env:VCPKG_ROOT = "$env:RUNNER_TEMP\vcpkg"
+          git clone --depth 1 https://github.com/microsoft/vcpkg $env:VCPKG_ROOT
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
+          & "$env:VCPKG_ROOT\vcpkg.exe" install `
+            openvdb[core]:x64-windows-static-md `
+            tbb:x64-windows-static-md `
+            zlib:x64-windows-static-md `
+            imath:x64-windows-static-md `
+            spdlog:x64-windows-static-md
+
+      - name: Configure CMake (Release, /MD, OpenMP ON, LTO, minimal deps)
+        shell: powershell
+        run: >
+          cmake -S . -B build-ue-full -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
+          -DBUILD_SHARED_LIBS=OFF
+          -DWITH_3RD_PARTY_LIBS=ON
+          -DOPENVDB_CORE_SHARED=OFF
+          -DOPENVDB_USE_BLOSC=OFF
+          -DOPENVDB_BUILD_TOOLS=OFF
+          -DOPENVDB_BUILD_UNITTESTS=OFF
+          -DOPENVDB_BUILD_PYTHON_BINDINGS=OFF
+          -DOPENVDB_BUILD_DOCS=OFF
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static-md
+          -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
+          -DCMAKE_CXX_FLAGS_RELEASE="/O2 /GL /Gy"
+          -DCMAKE_SHARED_LINKER_FLAGS_RELEASE="/LTCG /OPT:REF /OPT:ICF"
+
+      - name: Build _coacd (lib_coacd.dll)
+        shell: powershell
+        run: cmake --build build-ue-full --target _coacd --config Release --parallel
+
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lib_coacd-windows-amd64-Release-${{ github.run_number }}
+          path: build-ue-full/Release/lib_coacd.dll
+          if-no-files-found: error
+          retention-days: 14
+
