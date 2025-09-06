@@ -1,9 +1,6 @@
 name: Build Wheels and Test
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
